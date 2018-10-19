@@ -1,10 +1,16 @@
-echo "### installing dependencies"
-apt install python-setuptools python-psutil python-pil
-pip install Adafruit-SSD1306 Adafruit-BBIO
-echo "### copying files"
-cp status.py /usr/bin/
-cp status.service /etc/systemd/system
-echo "### reloading systemd"
-systemctl daemon-reload
-echo "### starting service"
-sysetmctl start status
+if [ -f /dev/spi-1 ]; then
+    echo "### installing dependencies"
+    apt install python-setuptools python-psutil python-pil python-pip
+    pip install Adafruit-SSD1306 Adafruit-BBIO Adafruit-GPIO
+    echo "### copying files"
+    cp status.py /usr/bin/
+    cp status.service /etc/systemd/system
+    echo "### reloading systemd"
+    systemctl daemon-reload
+    echo "### enabling service"
+    systemctl enable status
+    echo "### starting service"
+    systemctl start status
+else
+    echo "please use raspi-config to enable spi and try again"
+fi
