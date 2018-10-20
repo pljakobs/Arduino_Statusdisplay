@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright (c) 2017 Adafruit Industries
 # Author: Tony DiCola & James DeVito
 #
@@ -36,18 +37,6 @@ from PIL import ImageFont
 
 import subprocess
 
-def get_ip():
-	s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	try:
-		s.connect(('192.168.29.1',1))
-		IP=s.getsockname()[0]
-	except:
-		IP = '127.0.0.1'
-	finally:
-		s.close()
-	return IP
-	
-
 class GracefulKiller:
 	kill_now = False
 	def __init__(self):
@@ -75,10 +64,10 @@ SPI_DEVICE = 0
 # SPI_DEVICE = 0
 
 # 128x32 display with hardware I2C:
-disp = Adafruit_SSD1306.SSD1306_128_32(rst=RST)
+# disp = Adafruit_SSD1306.SSD1306_128_32(rst=RST)
 
 # 128x64 display with hardware I2C:
-# disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST)
+disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST)
 
 # Note you can change the I2C address by passing an i2c_address parameter like:
 # disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST, i2c_address=0x3C)
@@ -102,79 +91,110 @@ killer=GracefulKiller()
 
 pid = str(os.getpid())
 
-if os.path.isfile(pidfile):
-    print "%s already exists, exiting" % pidfile
-    sys.exit()
-file(pidfile, 'w').write(pid)
-try:
+def bytes2human(n):
+    """
+    >>> bytes2human(10000)
+    '9.8 K'
+    >>> bytes2human(100001221)
+    '95.4 M'
+    """
+    symbols = ('K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+    prefix = {}
+    for i, s in enumerate(symbols):
+        prefix[s] = 1 << (i + 1) * 10
+    for s in reversed(symbols):
+        if n >= prefix[s]:
+            value = float(n) / prefix[s]
+            return '%.2f%s' % (value, s)
+    return '%.2fB' % (n)
 
-	# Initialize library.
-	disp.begin()
+def readConfig():
+    config=configparser.ConfigParser()
+    config.sections()
+    config.read('/etc/status.cfg')
 
-	# Clear display.
-	disp.clear()
-	disp.display()
+def main():
+    if os.path.isfile(pidfile):
+        print "%s already exists, exiting" % pidfile
+        sys.exit()
+    file(pidfile, 'w').write(pid)
+    hostname=os.uname()[1]
+    try:
 
-	# Create blank image for drawing.
-	# Make sure to create image with mode '1' for 1-bit color.
-	width = disp.width
-	height = disp.height
-	image = Image.new('1', (width, height))
+            # Initialize library.
+            disp.begin()
 
-	# Get drawing object to draw on image.
-	draw = ImageDraw.Draw(image)
+            # Clear display.
+            disp.clear()
+            disp.display()
 
-	# Draw a black filled box to clear the image.
-	draw.rectangle((0,0,width,height), outline=0, fill=0)
+            # Create blank image for drawing.
+            # Make sure to create image with mode '1' for 1-bit color.
+            width = disp.width
+            height = disp.height
+            image = Image.new('1', (width, height))
 
-	# Draw some shapes.
-	# First define some constants to allow easy resizing of shapes.
-	padding = -2
-	top = padding
-	bottom = height-padding
-	# Move left to right keeping track of the current x position for drawing shapes.
-	x = 0
+            # Get drawing object to draw on image.
+            draw = ImageDraw.Draw(image)
 
+            # Draw a black filled box to clear the image.
+            draw.rectangle((0,0,width,height), outline=0, fill=0)
 
-	# Load default font.
-	font = ImageFont.load_default()
+            # Load default font.
+            font = ImageFont.load_default()
 
-	# Alternatively load a TTF font.  Make sure the .ttf font file is in the same directory as the python script!
-	# Some other nice fonts to try: http://www.dafont.com/bitmap.php
-	# font = ImageFont.truetype('Minecraftia.ttf', 8)
+            # Alternatively load a TTF font.  Make sure the .ttf font file is in the same directory as the python script!
+            # Some other nice fonts to try: http://www.dafont.com/bitmap.php
+            # font = ImageFont.truetype('Minecraftia.ttf', 8)
+            top=0
+            lheight=8
 
-	while True:
-		if not killer.kill_now:
-		    # Draw a black filled box to clear the image.
-		    draw.rectangle((0,0,width,height), outline=0, fill=0)
+            while True:
+                    if not killer.kill_now:
+                        # Draw a black filled box to clear the image.
+                        draw.rectangle((0,0,width,height), outline=0, fill=0)
 
-		    # Shell scripts for system monitoring from here : https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
-		    IP=get_ip()
-		    CPU=psutil.cpu_percent(interval=5)
+                        # Shell scripts for system monitoring from here : https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
+                        stats=psutil.net_if_stats()
+                        for nic, addrs in psutil.net_if_addrs().items():
+                            if nic!="lo":
+                                for addr in addrs:
+                                    if addr.family == socket.AF_INET:
+                                        draw.rectangle((0,0,width,height), outline=0,fill=0)
+                                        draw.text((1,lheight*0), "### "+hostname+" ###", font=font, fill=255)
+                                        nicname=str(nic)+"     "
+                                        draw.text((1, lheight*1), nicname[:5]+":"+str(addr.address), font=font, fill=255)
 
-		    cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%sMB %.2f%%\", $3,$2,$3*100/$2 }'"
-		    MemUsage = subprocess.check_output(cmd, shell = True )
-		    cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%dGB %s\", $3,$2,$5}'"
-		    Disk = subprocess.check_output(cmd, shell = True )
+                                        CPU=psutil.cpu_percent(interval=0)
+                                        cputimes=psutil.cpu_times_percent(interval=0)
 
-		    # Write two lines of text.
+                                        cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%sMB %.2f%%\", $3,$2,$3*100/$2 }'"
+                                        MemUsage = subprocess.check_output(cmd, shell = True )
+                                        cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%dGB %s\", $3,$2,$5}'"
+                                        Disk = subprocess.check_output(cmd, shell = True )
 
-		    draw.text((x, top),       "IP: " + str(IP),  font=font, fill=255)
-		    draw.text((x, top+8),     "CPU: " + str(CPU)+"%", font=font, fill=255)
-		    draw.text((x, top+16),    str(MemUsage),  font=font, fill=255)
-		    draw.text((x, top+25),    str(Disk),  font=font, fill=255)
+                                        # Write two lines of text.
 
-		    # Display image.
-		    disp.image(image)
-		    disp.display()
-		    time.sleep(.2)
-		else:
-		    draw.rectangle((0,0,width,height), outline=0,fill=0)
-		    draw.text((x,top), "shutting down")
-		    draw.text((x,top+8),"daemon")
-		    os.unlink(pidfile)
-		    exit
-finally:
-	os.unlink(pidfile)
+                                        draw.text((1, lheight*2),     "CPU: " + str(CPU)+"%", font=font, fill=255)
+                                        draw.text((1, lheight*3), "us: "+str(int(cputimes.user))+" ni: "+str(int(cputimes.nice))+" sy: "+str(int(cputimes.system)), font=font, fill=255)
+                                        draw.text((1, lheight*4),    str(MemUsage),  font=font, fill=255)
+                                        draw.text((1, lheight*5),    str(Disk),  font=font, fill=255)
 
+                                        # Display image.
+                                        disp.image(image)
+                                        disp.display()
+                                        time.sleep(5)
+                    else:
+                        draw.rectangle((0,0,width,height), outline=0,fill=0)
+                        draw.text((1,top), "shutting down")
+                        draw.text((1,top+8),"daemon")
+                        disp.image(image)
+                        disp.display()
 
+                        os.unlink(pidfile)
+                        exit
+    finally:
+            os.unlink(pidfile)
+
+if __name__ == '__main__':
+    main()
