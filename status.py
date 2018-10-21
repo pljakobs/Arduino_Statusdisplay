@@ -28,7 +28,8 @@ import Adafruit_SSD1306
 import os
 import sys
 import psutil
-
+import netifaces
+from netifaces import interfaces, ifaddresses, AF_INET
 import socket
 
 from PIL import Image
@@ -91,6 +92,62 @@ killer=GracefulKiller()
 
 pid = str(os.getpid())
 
+class stat:
+    def __init__(self):
+        self.nicIndex=0
+
+    def get(self, item):
+        if item == "hostname":
+            hostname=os.uname()[1]
+            return os.uname()[1]
+            pass
+        elif item == "CPUload":
+            return "CPU: "+str(psutil.cpu_percent(interval=0))+"%"
+            pass
+        elif item == "CPUpercent":
+            cputimes=psutil.cpu_times_percent(interval=0)
+            return "us: "+str(int(cputimes.user))+" ni: "+str(int(cputimes.nice))+" sy: "+str(int(cputimes.system))
+            pass
+        elif item == "mem":
+            cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%sMB %.2f%%\", $3,$2,$3*100/$2 }'"
+            return str(subprocess.check_output(cmd, shell = True ))
+            pass
+        elif item == "disk":
+            cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%dGB %s\", $3,$2,$5}'"
+            return str(subprocess.check_output(cmd, shell = True ))
+            pass
+        elif item == "line":
+            return "--------"
+            pass
+        elif item== "nicv4":
+            nics=netifaces.interfaces()
+            numNics=len(nics) 
+            if self.nicIndex>=numNics:
+                self.nicIndex=0
+            while nics[self.nicIndex]=="lo" or nics[self.nicIndex]=="bond0":
+                self.nicIndex+=1
+                if self.nicIndex>=numNics:
+                    self.nicIndex=0
+            nicName=nics[self.nicIndex]+"     "
+            address=netifaces.ifaddresses(nics[self.nicIndex])[AF_INET][0]['addr']
+            self.nicIndex+=1
+            return nicName[:5]+":"+str(address)
+            pass
+        elif item== "nicv6":
+            nics=netifaces.interfaces()
+            numNics=len(nics) 
+            if self.nicIndex>=numNics:
+                self.nicIndex=0
+            while nics[self.nicIndex]=="lo" or nics[self.nicIndex]=="bond0":
+                self.nicIndex+=1
+                if self.nicIndex>=numNics:
+                    self.nicIndex=0
+            nicName=nics[self.nicIndex]+"     "
+            address=netifaces.ifaddresses(nics[self.nicIndex])[AF_INET6][0]['addr']
+            self.nicIndex+=1
+            return nicName[:5]+":"+str(address)
+            pass
+
 def bytes2human(n):
     """
     >>> bytes2human(10000)
@@ -118,9 +175,8 @@ def main():
         print "%s already exists, exiting" % pidfile
         sys.exit()
     file(pidfile, 'w').write(pid)
-    hostname=os.uname()[1]
     try:
-
+            Status=stat()
             # Initialize library.
             disp.begin()
 
@@ -150,49 +206,38 @@ def main():
             lheight=8
 
             while True:
-                    if not killer.kill_now:
-                        # Draw a black filled box to clear the image.
-                        draw.rectangle((0,0,width,height), outline=0, fill=0)
+                if not killer.kill_now:
+                    # Draw a black filled box to clear the image.
+                    draw.rectangle((0,0,width,height), outline=0, fill=0)
 
-                        # Shell scripts for system monitoring from here : https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
-                        stats=psutil.net_if_stats()
-                        for nic, addrs in psutil.net_if_addrs().items():
-                            if nic!="lo":
-                                for addr in addrs:
-                                    if addr.family == socket.AF_INET:
-                                        draw.rectangle((0,0,width,height), outline=0,fill=0)
-                                        draw.text((1,lheight*0), "### "+hostname+" ###", font=font, fill=255)
-                                        nicname=str(nic)+"     "
-                                        draw.text((1, lheight*1), nicname[:5]+":"+str(addr.address), font=font, fill=255)
+                    draw.text((1, lheight*0),     Status.get('hostname'), font=font, fill=255)
+                    draw.text((1, lheight*1),     Status.get('nicv4'), font=font, fill=255)
+                    draw.text((1, lheight*2),     Status.get('CPUload'), font=font, fill=255)
+                    draw.text((1, lheight*3),     Status.get('CPUpercent'), font=font, fill=255)
+                    draw.text((1, lheight*4),     Status.get('mem'),  font=font, fill=255)
+                    draw.text((1, lheight*5),     Status.get('disk'),  font=font, fill=255)
 
-                                        CPU=psutil.cpu_percent(interval=0)
-                                        cputimes=psutil.cpu_times_percent(interval=0)
+                    #print Status.get('hostname')
+                    #print "::>" + Status.get('nic')
+                    #print Status.get('CPUload')
+                    #print Status.get('CPUpercent')
+                    #print Status.get('mem')
+                    #print Status.get('disk')
 
-                                        cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%sMB %.2f%%\", $3,$2,$3*100/$2 }'"
-                                        MemUsage = subprocess.check_output(cmd, shell = True )
-                                        cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%dGB %s\", $3,$2,$5}'"
-                                        Disk = subprocess.check_output(cmd, shell = True )
 
-                                        # Write two lines of text.
+                    # Display image.
+                    disp.image(image)
+                    disp.display()
+                    time.sleep(1)
+                else:
+                    draw.rectangle((0,0,width,height), outline=0,fill=0)
+                    draw.text((1,top), "shutting down")
+                    draw.text((1,top+8),"daemon")
+                    disp.image(image)
+                    disp.display()
 
-                                        draw.text((1, lheight*2),     "CPU: " + str(CPU)+"%", font=font, fill=255)
-                                        draw.text((1, lheight*3), "us: "+str(int(cputimes.user))+" ni: "+str(int(cputimes.nice))+" sy: "+str(int(cputimes.system)), font=font, fill=255)
-                                        draw.text((1, lheight*4),    str(MemUsage),  font=font, fill=255)
-                                        draw.text((1, lheight*5),    str(Disk),  font=font, fill=255)
-
-                                        # Display image.
-                                        disp.image(image)
-                                        disp.display()
-                                        time.sleep(5)
-                    else:
-                        draw.rectangle((0,0,width,height), outline=0,fill=0)
-                        draw.text((1,top), "shutting down")
-                        draw.text((1,top+8),"daemon")
-                        disp.image(image)
-                        disp.display()
-
-                        os.unlink(pidfile)
-                        exit
+                    os.unlink(pidfile)
+                    exit
     finally:
             os.unlink(pidfile)
 
