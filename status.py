@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-# Copyright (c) 2017 Adafruit Industries
-# Author: Tony DiCola & James DeVito
+# Copyright (c) 2018 Peter Jakobs
+# Author: Peter Jakobs
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
