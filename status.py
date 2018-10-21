@@ -31,6 +31,7 @@ import psutil
 import netifaces
 from netifaces import interfaces, ifaddresses, AF_INET
 import socket
+import configparser
 
 from PIL import Image
 from PIL import ImageDraw
@@ -68,7 +69,7 @@ SPI_DEVICE = 0
 # disp = Adafruit_SSD1306.SSD1306_128_32(rst=RST)
 
 # 128x64 display with hardware I2C:
-disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST)
+# disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST)
 
 # Note you can change the I2C address by passing an i2c_address parameter like:
 # disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST, i2c_address=0x3C)
@@ -116,8 +117,14 @@ class stat:
             cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%dGB %s\", $3,$2,$5}'"
             return str(subprocess.check_output(cmd, shell = True ))
             pass
+        elif item == "dline":
+            return "===================="
+            pass
         elif item == "line":
-            return "--------"
+            return "--------------------"
+            pass
+        elif item == "blank":
+            return "                    "
             pass
         elif item== "nicv4":
             nics=netifaces.interfaces()
@@ -147,6 +154,8 @@ class stat:
             self.nicIndex+=1
             return nicName[:5]+":"+str(address)
             pass
+        else:
+            return "no such item"
 
 def bytes2human(n):
     """
@@ -165,16 +174,30 @@ def bytes2human(n):
             return '%.2f%s' % (value, s)
     return '%.2fB' % (n)
 
-def readConfig():
-    config=configparser.ConfigParser()
-    config.sections()
-    config.read('/etc/status.cfg')
-
+    
 def main():
     if os.path.isfile(pidfile):
         print "%s already exists, exiting" % pidfile
         sys.exit()
     file(pidfile, 'w').write(pid)
+
+    config=configparser.ConfigParser({'interval':'5'})
+    config.sections()
+    config.read('/etc/status.cfg')
+
+    display= config.get('display', 'type')
+    sleeptime=float(config.get('display', 'interval'))
+   
+    if display=="128x32":
+        # 128x32 display with hardware I2C:
+         disp = Adafruit_SSD1306.SSD1306_128_32(rst=RST)
+         numLines=4
+
+    elif display=="128x64":
+        # 128x64 display with hardware I2C:
+        disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST)
+        numLines=9
+
     try:
             Status=stat()
             # Initialize library.
@@ -209,26 +232,13 @@ def main():
                 if not killer.kill_now:
                     # Draw a black filled box to clear the image.
                     draw.rectangle((0,0,width,height), outline=0, fill=0)
-
-                    draw.text((1, lheight*0),     Status.get('hostname'), font=font, fill=255)
-                    draw.text((1, lheight*1),     Status.get('nicv4'), font=font, fill=255)
-                    draw.text((1, lheight*2),     Status.get('CPUload'), font=font, fill=255)
-                    draw.text((1, lheight*3),     Status.get('CPUpercent'), font=font, fill=255)
-                    draw.text((1, lheight*4),     Status.get('mem'),  font=font, fill=255)
-                    draw.text((1, lheight*5),     Status.get('disk'),  font=font, fill=255)
-
-                    #print Status.get('hostname')
-                    #print "::>" + Status.get('nic')
-                    #print Status.get('CPUload')
-                    #print Status.get('CPUpercent')
-                    #print Status.get('mem')
-                    #print Status.get('disk')
-
-
+                    for i in range(1, numLines):
+                        item=config.get('display','line'+str(i))
+                        draw.text((1,lheight*(i-1)), Status.get(item),font=font, fill=255)
                     # Display image.
                     disp.image(image)
                     disp.display()
-                    time.sleep(1)
+                    time.sleep(sleeptime)
                 else:
                     draw.rectangle((0,0,width,height), outline=0,fill=0)
                     draw.text((1,top), "shutting down")
