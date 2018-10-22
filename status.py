@@ -128,7 +128,7 @@ class stat:
             pass
         elif item== "nicv4":
             nics=netifaces.interfaces()
-            numNics=len(nics) 
+            numNics=len(nics)
             if self.nicIndex>=numNics:
                 self.nicIndex=0
             while nics[self.nicIndex]=="lo" or nics[self.nicIndex]=="bond0":
@@ -142,7 +142,7 @@ class stat:
             pass
         elif item== "nicv6":
             nics=netifaces.interfaces()
-            numNics=len(nics) 
+            numNics=len(nics)
             if self.nicIndex>=numNics:
                 self.nicIndex=0
             while nics[self.nicIndex]=="lo" or nics[self.nicIndex]=="bond0":
@@ -174,7 +174,7 @@ def bytes2human(n):
             return '%.2f%s' % (value, s)
     return '%.2fB' % (n)
 
-    
+
 def main():
     if os.path.isfile(pidfile):
         print "%s already exists, exiting" % pidfile
@@ -187,11 +187,11 @@ def main():
 
     display= config.get('display', 'type')
     sleeptime=float(config.get('display', 'interval'))
-   
+
     if display=="128x32":
         # 128x32 display with hardware I2C:
          disp = Adafruit_SSD1306.SSD1306_128_32(rst=RST)
-         numLines=4
+         numLines=5
 
     elif display=="128x64":
         # 128x64 display with hardware I2C:
